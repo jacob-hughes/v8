@@ -1072,6 +1072,15 @@ MaybeHandle<Code> GetOptimizedCode(Handle<JSFunction> function,
   OptimizedCompilationInfo* compilation_info = job->compilation_info();
 
   // Prepare the job and launch cocncurrent compilation, or compile now.
+
+  // To fix issue with SealHandleScope.
+  HandleScope handle_scope(isolate);
+  handle(Smi(0), isolate);
+
+  // In case of concurrent recompilation, all handles below this point will be
+  // allocated in a deferred handle scope that is detached and handed off to
+  // the background thread when we return.
+  base::Optional<CompilationHandleScope> compilation;
   if (mode == ConcurrencyMode::kConcurrent) {
     if (GetOptimizedCodeLater(std::move(job), isolate, compilation_info,
                               code_kind, function)) {

@@ -672,7 +672,15 @@ static void Generate_JSEntryTrampolineHelper(MacroAssembler* masm,
     __ jmp(&entry, Label::kNear);
     __ bind(&loop);
     __ movq(kScratchRegister, Operand(rbx, rcx, times_system_pointer_size, 0));
+    Label indirect, end;
+    __ testq(kScratchRegister, Immediate(0x1));
+    __ j(zero, &indirect, Label::kNear);
+    __ Push(kScratchRegister);  // direct handle
+    __ jmp(&end, Label::kNear);
+    __ bind(&indirect);
     __ Push(Operand(kScratchRegister, 0));  // dereference handle
+    __ jmp(&end, Label::kNear);
+    __ bind(&end);
     __ addq(rcx, Immediate(1));
     __ bind(&entry);
     __ cmpq(rcx, rax);
