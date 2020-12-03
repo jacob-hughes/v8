@@ -64,6 +64,18 @@ bool PagedSpaceObjectIterator::AdvanceToNextPage() {
   DCHECK(cur_page->SweepingDone());
   return true;
 }
+bool PagedSpaceObjectIterator::AdvanceToNextPageOffset(Address address) {
+  DCHECK_EQ(cur_addr_, cur_end_);
+  if (current_page_ == page_range_.end()) return false;
+  Page* cur_page = *(current_page_++);
+
+  cur_addr_ = address;
+  cur_end_ = cur_page->area_end();
+  DCHECK_EQ(cur_addr_, cur_end_);
+  DCHECK_EQ(address, cur_page->area_start());
+  DCHECK(cur_page->SweepingDone());
+  return true;
+}
 Page* PagedSpace::InitializePage(MemoryChunk* chunk) {
   Page* page = static_cast<Page*>(chunk);
   DCHECK_EQ(

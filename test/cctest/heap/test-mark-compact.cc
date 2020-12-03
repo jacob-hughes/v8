@@ -266,16 +266,19 @@ HEAP_TEST(ObjectStartBitmap) {
   HeapObject obj2 = *factory->NewStringFromStaticChars("world");
   Page* page = Page::FromAddress(obj.ptr());
 
+  CHECK(page->object_start_bitmap()->FindNearestPrecedingObject(
+            obj.address() - 1) == page.area_start());
+
   CHECK(page->object_start_bitmap()->CheckBit(obj.address()));
   CHECK(page->object_start_bitmap()->CheckBit(obj2.address()));
 
   Address obj_inner_ptr = obj.ptr() + 2;
-  CHECK(page->object_start_bitmap()->FindBasePtr(obj_inner_ptr) ==
-        obj.address());
+  CHECK(page->object_start_bitmap()->FindNearestPrecedingObject(
+            obj_inner_ptr) == obj.address());
 
   Address obj2_inner_ptr = obj2.ptr() + 2;
-  CHECK(page->object_start_bitmap()->FindBasePtr(obj2_inner_ptr) ==
-        obj2.address());
+  CHECK(page->object_start_bitmap()->FindNearestPrecedingObject(
+            obj2_inner_ptr) == obj2.address());
 
   CcTest::CollectAllGarbage();
 
@@ -285,6 +288,123 @@ HEAP_TEST(ObjectStartBitmap) {
   CHECK(page->object_start_bitmap()->CheckBit(obj2.address()));
 
 #endif
+}
+
+HEAP_TEST(ImpreciseObjectStartBitmap) {
+  if (!FLAG_single_generation || !FLAG_conservative_stack_scanning) return;
+
+#if V8_ENABLE_CONSERVATIVE_STACK_SCANNING
+
+  CcTest::InitializeVM();
+  Isolate* isolate = CcTest::i_isolate();
+  v8::HandleScope sc(CcTest::isolate());
+
+  Heap* heap = isolate->heap();
+  heap::SealCurrentObjects(heap);
+
+  auto* factory = isolate->factory();
+  HeapObject obj = *factory->NewStringFromStaticChars("hello");
+  HeapObject obj2 = *factory->NewStringFromStaticChars("world");
+  Page* page = Page::FromAddress(obj.ptr());
+
+  CHECK(page->object_start_bitmap()->CheckBit(obj.address()));
+  CHECK(page->object_start_bitmap()->CheckBit(obj2.address()));
+
+  Address obj_inner_ptr = obj.ptr() + 2;
+  CHECK(page->object_start_bitmap()->FindNearestPrecedingObject(
+            obj_inner_ptr) == obj.address());
+
+  Address obj2_inner_ptr = obj2.ptr() + 2;
+  CHECK(page->object_start_bitmap()->FindNearestPrecedingObject(
+            obj2_inner_ptr) == obj2.address());
+
+  CcTest::CollectAllGarbage();
+
+  CHECK((obj).IsString());
+  CHECK((obj2).IsString());
+  CHECK(page->object_start_bitmap()->CheckBit(obj.address()));
+  CHECK(page->object_start_bitmap()->CheckBit(obj2.address()));
+
+#endif
+}
+
+HEAP_TEST(StackScanOldPagePrecise) {
+  if (!FLAG_single_generation || !FLAG_conservative_stack_scanning) return;
+  // TODO(jakehughes): Test can't be enabled until direct handles have landed.
+  CcTest::InitializeVM();
+  Isolate* isolate = CcTest::i_isolate();
+  v8::HandleScope sc(CcTest::isolate());
+  Heap* heap = isolate->heap();
+  heap::SealCurrentObjects(heap);
+
+  auto* factory = isolate->factory();
+  Handle<Object> hello = factory->NewStringFromStaticChars("hello");
+  Handle<Object> num = factory->NewNumber(1.12344);
+  Handle<Object> world = factory->NewStringFromStaticChars("world");
+
+  // Check that handles are direct.
+  CHECK(hello.address() & 0x1);
+  CHECK(num.address() & 0x1);
+  CHECK(world.address() & 0x1);
+
+  Page* page = Page::FromAddress(hello.address());
+
+  CHECK(Page::OnSamePage(hello.address(), num.address()));
+  CHECK(Page::OnSamePage(hello.address(), world.address()));
+  CHECK(page->owner_identity(), OLD_SPACE);
+
+  CcTest::CollectAllGarbage();
+
+  CHECK((*hello).IsString());
+  CHECK((*world).IsString());
+  CHECK((*num).IsHeapNumber());
+  CHECK(!page->IsPinned());
+
+  // Re-collection will test the OSB was rebuilt correctly in the sweeper
+  CcTest::CollectAllGarbage();
+
+  CHECK((*hello).IsString());
+  CHECK((*world).IsString());
+  CHECK((*num).IsHeapNumber());
+  CHECK(!page->IsPinned());
+}
+
+HEAP_TEST(StackScanOldPageImprecise) {
+  if (!FLAG_single_generation || !FLAG_conservative_stack_scanning) return;
+  // TODO(jakehughes): Test can't be enabled until direct handles have landed.
+  CcTest::InitializeVM();
+  Isolate* isolate = CcTest::i_isolate();
+  v8::HandleScope sc(CcTest::isolate());
+  Heap* heap = isolate->heap();
+  heap::SealCurrentObjects(heap);
+
+  auto* factory = isolate->factory();
+  Handle<Object> hello = factory->NewStringFromStaticChars("hello");
+  Handle<Object> num = factory->NewNumber(1.12344);
+  Handle<Object> world = factory->NewStringFromStaticChars("world");
+
+  // Check that handles are direct.
+  CHECK(hello.address() & 0x1);
+  CHECK(num.address() & 0x1);
+  CHECK(world.address() & 0x1);
+
+  Page* page = Page::FromAddress(hello.address());
+
+  CHECK(Page::OnSamePage(hello.address(), num.address()));
+  CHECK(Page::OnSamePage(hello.address(), world.address()));
+  CHECK(page->owner_identity(), OLD_SPACE);
+
+  // Clear the OSB to test that objects are found imprecisely.
+  page->object_start_bitmap()->Clear();
+
+  CcTest::CollectAllGarbage();
+
+  CHECK((*hello).IsString());
+  CHECK((*world).IsString());
+  CHECK((*num).IsHeapNumber());
+
+  // Page should not remain pinned
+  CHECK(!page->IsPinned());
 }
 
 // TODO(1600): compaction of map space is temporary removed from GC.

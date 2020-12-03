@@ -18,9 +18,11 @@ class ConservativeStackVisitor : public ::heap::base::StackVisitor {
   void VisitPointer(const void* pointer) final;
 
  private:
-  bool CheckPage(Address address, MemoryChunk* page);
+  bool CheckOldSpacePage(Address address, Page* page);
 
   void VisitConservativelyIfPointer(const void* pointer);
+
+  void VisitRoot(Address address);
 
   Isolate* isolate_ = nullptr;
   RootVisitor* delegate_ = nullptr;

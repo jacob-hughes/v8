@@ -23,6 +23,8 @@ class V8_EXPORT_PRIVATE Stack final {
  public:
   explicit Stack(const void* stack_start);
 
+  Stack() : stack_start_(nullptr) {}
+
   // Returns true if |slot| is part of the stack and false otherwise.
   bool IsOnStack(void* slot) const;
 

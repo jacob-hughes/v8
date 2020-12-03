@@ -388,6 +388,7 @@ int Sweeper::RawSweep(
 
 #ifdef V8_ENABLE_CONSERVATIVE_STACK_SCANNING
   p->object_start_bitmap()->Clear();
+  p->ClearFlag(BasicMemoryChunk::Flag::PINNED);
 #endif
 
   // Iterate over the page using the live objects and free the memory before

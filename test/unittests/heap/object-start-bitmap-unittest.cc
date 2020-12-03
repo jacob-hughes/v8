@@ -128,7 +128,8 @@ TEST(V8ObjectStartBitmapTest, FindBasePtrExact) {
   ObjectStartBitmap bitmap(TestObject::kBaseOffset);
   TestObject object(654);
   bitmap.SetBit(object);
-  EXPECT_EQ(object.base_ptr(), bitmap.FindBasePtr(object.base_ptr()));
+  EXPECT_EQ(object.base_ptr(),
+            bitmap.FindNearestPrecedingObject(object.base_ptr()));
 }
 
 TEST(V8ObjectStartBitmapTest, FindBasePtrApproximate) {
@@ -136,8 +137,8 @@ TEST(V8ObjectStartBitmapTest, FindBasePtrApproximate) {
   ObjectStartBitmap bitmap(TestObject::kBaseOffset);
   TestObject object(654);
   bitmap.SetBit(object);
-  EXPECT_EQ(object.base_ptr(),
-            bitmap.FindBasePtr(object.base_ptr() + kInternalDelta));
+  EXPECT_EQ(object.base_ptr(), bitmap.FindNearestPrecedingObject(
+                                   object.base_ptr() + kInternalDelta));
 }
 
 TEST(V8ObjectStartBitmapTest, FindBasePtrIteratingWholeBitmap) {
@@ -145,7 +146,8 @@ TEST(V8ObjectStartBitmapTest, FindBasePtrIteratingWholeBitmap) {
   TestObject object_to_find(TestObject(0));
   Address hint_index = TestObject(ObjectStartBitmap::MaxEntries() - 1);
   bitmap.SetBit(object_to_find);
-  EXPECT_EQ(object_to_find.base_ptr(), bitmap.FindBasePtr(hint_index));
+  EXPECT_EQ(object_to_find.base_ptr(),
+            bitmap.FindNearestPrecedingObject(hint_index));
 }
 
 TEST(V8ObjectStartBitmapTest, FindBasePtrNextCell) {
@@ -156,7 +158,7 @@ TEST(V8ObjectStartBitmapTest, FindBasePtrNextCell) {
   Address hint = TestObject(kCellSize);
   bitmap.SetBit(TestObject(0));
   bitmap.SetBit(object_to_find);
-  EXPECT_EQ(object_to_find.base_ptr(), bitmap.FindBasePtr(hint));
+  EXPECT_EQ(object_to_find.base_ptr(), bitmap.FindNearestPrecedingObject(hint));
 }
 
 TEST(V8ObjectStartBitmapTest, FindBasePtrSameCell) {
@@ -167,7 +169,7 @@ TEST(V8ObjectStartBitmapTest, FindBasePtrSameCell) {
   bitmap.SetBit(TestObject(0));
   bitmap.SetBit(object_to_find);
   EXPECT_EQ(object_to_find.base_ptr(),
-            bitmap.FindBasePtr(object_to_find.base_ptr()));
+            bitmap.FindNearestPrecedingObject(object_to_find.base_ptr()));
 }
 
 }  // namespace internal

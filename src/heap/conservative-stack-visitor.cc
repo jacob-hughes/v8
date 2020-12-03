@@ -19,34 +19,36 @@ void ConservativeStackVisitor::VisitPointer(const void* pointer) {
   VisitConservativelyIfPointer(pointer);
 }
 
-bool ConservativeStackVisitor::CheckPage(Address address, MemoryChunk* page) {
+bool ConservativeStackVisitor::CheckOldSpacePage(Address address, Page* page) {
   if (address < page->area_start() || address >= page->area_end()) return false;
 
-  auto base_ptr = page->object_start_bitmap()->FindBasePtr(address);
-  if (base_ptr == kNullAddress) {
-    return false;
+  HeapObject nearest_obj = HeapObject::FromAddress(
+      page->object_start_bitmap()->FindNearestPrecedingObject(address));
+
+  if (nearest_obj.address() != page->area_start()) {
+    // Fast path: the OSB was precise, and |address| points somewhere inside the
+    // nearest allocated object on the page.
+    if (address <= nearest_obj.address() + nearest_obj.Size()) {
+      VisitRoot(nearest_obj.address());
+      return true;
+    }
   }
 
-  // At this point, base_ptr *must* refer to the valid object. We check if
-  // |address| resides inside the object or beyond it in unused memory.
-  HeapObject obj = HeapObject::FromAddress(base_ptr);
-  Address obj_end = obj.address() + obj.Size();
+  PagedSpaceObjectIterator it(isolate_->heap(), isolate_->heap()->old_space(),
+                              page);
+  it.AdvanceToNextPageOffset(nearest_obj.address());
+  for (HeapObject obj = it.Next(); !obj.is_null(); obj = it.Next()) {
+    if (obj.address() > address) {
+      // |address| points to a hole of uninitialized memory in the page
+      return false;
+    }
 
-  if (address >= obj_end) {
-    // |address| points to unused memory.
-    return false;
+    if (address < obj.address() + obj.Size()) {
+      VisitRoot(obj.address());
+      return true;
+    }
   }
-
-  // TODO(jakehughes) Pinning is only required for the marking visitor. Other
-  // visitors (such as verify visitor) could work without pining. This should
-  // be moved to delegate_
-  page->SetFlag(BasicMemoryChunk::Flag::PINNED);
-
-  Object ptr = HeapObject::FromAddress(base_ptr);
-  FullObjectSlot root = FullObjectSlot(&ptr);
-  delegate_->VisitRootPointer(Root::kHandleScope, nullptr, root);
-  DCHECK(root == FullObjectSlot(reinterpret_cast<Address>(&base_ptr)));
-  return true;
+  return false;
 }
 
 void ConservativeStackVisitor::VisitConservativelyIfPointer(
@@ -58,20 +60,28 @@ void ConservativeStackVisitor::VisitConservativelyIfPointer(
   }
 
   for (Page* page : *isolate_->heap()->old_space()) {
-    if (CheckPage(address, page)) {
+    if (CheckOldSpacePage(address, page)) {
+      // TODO(jakehughes) Pinning is only required for the marking visitor.
+      // Other visitors (such as verify visitor) could work without pinning.
+      // This should be moved to delegate_
+      page->SetFlag(BasicMemoryChunk::Flag::PINNED);
       return;
     }
   }
 
   for (LargePage* page : *isolate_->heap()->lo_space()) {
     if (address >= page->area_start() && address < page->area_end()) {
-      Object ptr = page->GetObject();
-      FullObjectSlot root = FullObjectSlot(&ptr);
-      delegate_->VisitRootPointer(Root::kHandleScope, nullptr, root);
-      DCHECK(root == FullObjectSlot(&ptr));
+      VisitRoot(page->area_start());
       return;
     }
   }
+}
+
+void ConservativeStackVisitor::VisitRoot(Address address) {
+  Object obj = HeapObject::FromAddress(address);
+  FullObjectSlot root = FullObjectSlot(&obj);
+  delegate_->VisitRootPointer(Root::kHandleScope, nullptr, root);
+  DCHECK(root == FullObjectSlot(reinterpret_cast<Address>(&address)));
 }
 
 }  // namespace internal

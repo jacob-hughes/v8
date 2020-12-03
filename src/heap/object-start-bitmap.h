@@ -43,11 +43,15 @@ class V8_EXPORT_PRIVATE ObjectStartBitmap {
 
   explicit inline ObjectStartBitmap(size_t offset = 0);
 
-  // Finds an object header based on a maybe_inner_ptr. Will search for an
-  // object start in decreasing address order.
+  // Finds the nearest object allocated before |address|. This could be the
+  // object which |address| points to, but that's not guaranteed. Returns the
+  // start address of the nearest object.
   //
-  // This must only be used when there exists at least one entry in the bitmap.
-  inline Address FindBasePtr(Address maybe_inner_ptr) const;
+  // Warning: the bitmap may not contain any entries at all. To prevent an
+  // expensive IsEmpty check each time this method is called, the address of
+  // page->area_start() is always returned if no other entries are found. In
+  // this case, the caller must verify whether a live object resides there.
+  inline Address FindNearestPrecedingObject(Address address) const;
 
   inline void SetBit(Address);
   inline void ClearBit(Address);
@@ -91,14 +95,14 @@ ObjectStartBitmap::ObjectStartBitmap(size_t offset) : offset_(offset) {
   Clear();
 }
 
-Address ObjectStartBitmap::FindBasePtr(Address maybe_inner_ptr) const {
-  DCHECK_LE(offset(), maybe_inner_ptr);
-  size_t object_offset = maybe_inner_ptr - offset();
+Address ObjectStartBitmap::FindNearestPrecedingObject(Address address) const {
+  DCHECK_LE(offset(), address);
+  size_t object_offset = address - offset();
   size_t object_start_number = object_offset / kAllocationGranularity;
   size_t cell_index = object_start_number / kBitsPerCell;
   DCHECK_GT(object_start_bit_map_.size(), cell_index);
   const size_t bit = object_start_number & kCellMask;
-  // check if maybe_inner_ptr is the base pointer
+  // check if address is the base pointer
   uint32_t byte = load(cell_index) & ((1 << (bit + 1)) - 1);
   while (!byte && cell_index) {
     DCHECK_LT(0u, cell_index);
@@ -179,7 +183,8 @@ inline void ObjectStartBitmap::Iterate(Callback callback) const {
 }
 
 void ObjectStartBitmap::Clear() {
-  std::fill(object_start_bit_map_.begin(), object_start_bit_map_.end(), 0);
+  object_start_bit_map_[0] = 0x80000000;
+  std::fill(object_start_bit_map_.begin() + 1, object_start_bit_map_.end(), 0);
 }
 
 }  // namespace internal

@@ -47,6 +47,8 @@ class V8_EXPORT_PRIVATE PagedSpaceObjectIterator : public ObjectIterator {
   // Returns nullptr when the iteration has ended.
   inline HeapObject Next() override;
 
+  bool AdvanceToNextPageOffset(Address address);
+
  private:
   // Fast (inlined) path of next().
   inline HeapObject FromCurrentPage();
