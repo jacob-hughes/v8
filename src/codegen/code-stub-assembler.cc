@@ -1243,12 +1243,13 @@ TNode<HeapObject> CodeStubAssembler::AllocateInNewSpace(
 TNode<HeapObject> CodeStubAssembler::Allocate(TNode<IntPtrT> size_in_bytes,
                                               AllocationFlags flags) {
   Comment("Allocate");
-  bool const new_space = !(flags & kPretenured) || !FLAG_single_generation;
+  bool const new_space = !(flags & kPretenured) && !FLAG_single_generation;
   bool const allow_large_objects = flags & kAllowLargeObjectAllocation;
   // For optimized allocations, we don't allow the allocation to happen in a
   // different generation than requested.
-  bool const always_allocated_in_requested_space =
-      !new_space || !allow_large_objects || FLAG_young_generation_large_objects;
+  bool const always_allocated_in_requested_space = true;
+      /* !new_space || !allow_large_objects || FLAG_young_generation_large_objects; */
+  CHECK(!new_space);
   if (!allow_large_objects) {
     intptr_t size_constant;
     if (ToIntPtrConstant(size_in_bytes, &size_constant)) {
@@ -1264,6 +1265,7 @@ TNode<HeapObject> CodeStubAssembler::Allocate(TNode<IntPtrT> size_in_bytes,
         allow_large_objects ? AllowLargeObjects::kTrue
                             : AllowLargeObjects::kFalse);
   }
+  /* CHECK(false); */
   TNode<ExternalReference> top_address = ExternalConstant(
       new_space
           ? ExternalReference::new_space_allocation_top_address(isolate())
@@ -1287,6 +1289,7 @@ TNode<HeapObject> CodeStubAssembler::Allocate(TNode<IntPtrT> size_in_bytes,
                                     ReinterpretCast<RawPtrT>(top_address),
                                     ReinterpretCast<RawPtrT>(limit_address));
   } else {
+  CHECK(false);
     return AllocateRawUnaligned(size_in_bytes, flags,
                                 ReinterpretCast<RawPtrT>(top_address),
                                 ReinterpretCast<RawPtrT>(limit_address));
@@ -2698,8 +2701,14 @@ void CodeStubAssembler::StoreMapNoWriteBarrier(TNode<HeapObject> object,
 
 void CodeStubAssembler::StoreMapNoWriteBarrier(TNode<HeapObject> object,
                                                TNode<Map> map) {
+    if (FLAG_single_generation) {
+  OptimizedStoreFieldUnsafeNoWriteBarrier(MachineRepresentation::kTaggedPointer,
+                                          object, HeapObject::kMapOffset, map);
+
+    } else {
   OptimizedStoreFieldAssertNoWriteBarrier(MachineRepresentation::kTaggedPointer,
                                           object, HeapObject::kMapOffset, map);
+    }
 }
 
 void CodeStubAssembler::StoreObjectFieldRoot(TNode<HeapObject> object,

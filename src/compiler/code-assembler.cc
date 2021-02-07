@@ -716,7 +716,7 @@ void CodeAssembler::StoreToObject(MachineRepresentation rep,
       write_barrier_kind = WriteBarrierKind::kMapWriteBarrier;
       break;
     case StoreToObjectWriteBarrier::kNone:
-      if (CanBeTaggedPointer(rep)) {
+      if (CanBeTaggedPointer(rep) && !FLAG_single_generation) {
         write_barrier_kind = WriteBarrierKind::kAssertNoWriteBarrier;
       } else {
         write_barrier_kind = WriteBarrierKind::kNoWriteBarrier;
@@ -767,14 +767,14 @@ Node* CodeAssembler::StoreNoWriteBarrier(MachineRepresentation rep, Node* base,
                                          Node* value) {
   return raw_assembler()->Store(
       rep, base, value,
-      CanBeTaggedPointer(rep) ? kAssertNoWriteBarrier : kNoWriteBarrier);
+      (CanBeTaggedPointer(rep) && !FLAG_single_generation) ? kAssertNoWriteBarrier : kNoWriteBarrier);
 }
 
 Node* CodeAssembler::StoreNoWriteBarrier(MachineRepresentation rep, Node* base,
                                          Node* offset, Node* value) {
   return raw_assembler()->Store(
       rep, base, offset, value,
-      CanBeTaggedPointer(rep) ? kAssertNoWriteBarrier : kNoWriteBarrier);
+      (CanBeTaggedPointer(rep) && !FLAG_single_generation) ? kAssertNoWriteBarrier : kNoWriteBarrier);
 }
 
 Node* CodeAssembler::UnsafeStoreNoWriteBarrier(MachineRepresentation rep,

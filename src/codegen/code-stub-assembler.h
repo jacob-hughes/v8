@@ -1485,7 +1485,7 @@ class V8_EXPORT_PRIVATE CodeStubAssembler
   template <class T>
   void StoreObjectFieldNoWriteBarrier(TNode<HeapObject> object, int offset,
                                       TNode<T> value) {
-    if (CanBeTaggedPointer(MachineRepresentationOf<T>::value)) {
+    if (CanBeTaggedPointer(MachineRepresentationOf<T>::value) && !FLAG_single_generation) {
       OptimizedStoreFieldAssertNoWriteBarrier(MachineRepresentationOf<T>::value,
                                               object, offset, value);
     } else {
